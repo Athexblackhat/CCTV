@@ -15,13 +15,12 @@ COLORS=("32" "36" "34" "92" "96" "94")  # Green, Cyan, Blue variants
 MATRIX_CHARS=("ｱ" "ｲ" "ｳ" "ｴ" "ｵ" "ｶ" "ｷ" "ｸ" "ｹ" "ｺ" "0" "1" "█" "▓" "▒" "░" "╬" "╩" "╦" "╠" "╣" "║" "╗" "╝" "╚" "╔")
 
 # Terminal Control
-trap 'tput cnorm; clear; exit' INT TERM
+trap 'tput cnorm 2>/dev/null; clear; exit' INT TERM
 tput civis 2>/dev/null
 clear
 
 # ASCII Art Frames for startup
-declare -A STARTUP_FRAMES
-STARTUP_FRAMES[0]=$(cat << 'EOF'
+STARTUP_FRAMES_0=$(cat << 'EOF'
       ███████╗              ███████╗ ██████╗  ██████╗██╗███████╗████████╗██╗   ██╗
       ██╔════╝              ██╔════╝██╔═══██╗██╔════╝██║██╔════╝╚══██╔══╝╚██╗ ██╔╝
       █████╗      █████╗    ███████╗██║   ██║██║     ██║█████╗     ██║    ╚████╔╝ 
@@ -31,7 +30,7 @@ STARTUP_FRAMES[0]=$(cat << 'EOF'
 EOF
 )
 
-STARTUP_FRAMES[1]=$(cat << 'EOF'
+STARTUP_FRAMES_1=$(cat << 'EOF'
     ╔═══════════════════════════════════════════════════════════════╗
     ║                                                               ║
     ║   █████╗ ████████╗██╗  ██╗███████╗██╗  ██╗                    ║
@@ -49,8 +48,7 @@ EOF
 )
 
 # Hacking animation frames
-declare -A HACK_FRAMES
-HACK_FRAMES[0]=$(cat << 'EOF'
+HACK_FRAMES_0=$(cat << 'EOF'
     ████████████████████████████████████████████████████████████████
     █▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█
     █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█
@@ -64,7 +62,7 @@ HACK_FRAMES[0]=$(cat << 'EOF'
 EOF
 )
 
-HACK_FRAMES[1]=$(cat << 'EOF'
+HACK_FRAMES_1=$(cat << 'EOF'
     ████████████████████████████████████████████████████████████████
     █▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█
     █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█
@@ -80,7 +78,7 @@ HACK_FRAMES[1]=$(cat << 'EOF'
 EOF
 )
 
-HACK_FRAMES[2]=$(cat << 'EOF'
+HACK_FRAMES_2=$(cat << 'EOF'
     ████████████████████████████████████████████████████████████████
     █▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█
     █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█
@@ -97,7 +95,7 @@ HACK_FRAMES[2]=$(cat << 'EOF'
 EOF
 )
 
-HACK_FRAMES[3]=$(cat << 'EOF'
+HACK_FRAMES_3=$(cat << 'EOF'
     ████████████████████████████████████████████████████████████████
     █▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓██
     █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█
@@ -178,7 +176,7 @@ glitch_text() {
     done
 }
 
-# Typing effect with sound simulation
+# Typing effect
 type_effect() {
     local text="$1"
     local color="${2:-32}"
@@ -198,8 +196,14 @@ type_effect() {
 
 # Animated progress bar
 progress_bar() {
-    local width=50
     local duration=$1
+    local width=50
+    
+    # Prevent division by zero
+    if [ "$duration" -le 0 ]; then
+        duration=1
+    fi
+    
     local step=$((duration * 1000000 / width))
     
     echo -ne "["
@@ -209,7 +213,7 @@ progress_bar() {
         else
             echo -ne "\e[92m█\e[0m"
         fi
-        usleep $step 2>/dev/null || sleep 0.02
+        sleep 0.02 2>/dev/null || sleep 0.02
     done
     echo -ne "]\n"
 }
@@ -240,11 +244,11 @@ system_takeover() {
     
     # Phase 1: Initialization
     echo -e "\e[36m"
-    for frame in 0 1; do
-        clear
-        echo -e "${STARTUP_FRAMES[$frame]}"
-        sleep 0.8
-    done
+    echo "$STARTUP_FRAMES_0"
+    sleep 0.8
+    clear
+    echo "$STARTUP_FRAMES_1"
+    sleep 0.8
     
     sleep 1
     clear
@@ -270,26 +274,34 @@ EOF
     clear
     
     # Phase 5: Animated hacking frames
-    for frame in 0 1 2 3; do
-        clear
-        echo -e "\e[36m"
-        echo "${HACK_FRAMES[$frame]}"
-        echo -e "\e[0m"
-        
-        # Add dynamic effects
-        if [ $frame -eq 0 ]; then
-            echo -e "\e[33m> SCANNING VULNERABILITIES...\e[0m"
-            progress_bar 1
-        elif [ $frame -eq 1 ]; then
-            echo -e "\e[33m> EXPLOITING WEAKNESSES...\e[0m"
-            progress_bar 1
-        elif [ $frame -eq 2 ]; then
-            echo -e "\e[33m> ELEVATING PRIVILEGES...\e[0m"
-            progress_bar 1
-        fi
-        
-        sleep 2
-    done
+    echo -e "\e[36m"
+    echo "$HACK_FRAMES_0"
+    echo -e "\e[0m"
+    echo -e "\e[33m> SCANNING VULNERABILITIES...\e[0m"
+    progress_bar 1
+    sleep 2
+    clear
+    
+    echo -e "\e[36m"
+    echo "$HACK_FRAMES_1"
+    echo -e "\e[0m"
+    echo -e "\e[33m> EXPLOITING WEAKNESSES...\e[0m"
+    progress_bar 1
+    sleep 2
+    clear
+    
+    echo -e "\e[36m"
+    echo "$HACK_FRAMES_2"
+    echo -e "\e[0m"
+    echo -e "\e[33m> ELEVATING PRIVILEGES...\e[0m"
+    progress_bar 1
+    sleep 2
+    clear
+    
+    echo -e "\e[36m"
+    echo "$HACK_FRAMES_3"
+    echo -e "\e[0m"
+    sleep 2
     
     # Phase 6: Scanlines glitch
     scanlines 1
