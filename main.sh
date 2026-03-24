@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e  # Exit on error, but with graceful handling
+
 F="scripts"  # Scripts folder
 [ ! -d "$F" ] && mkdir -p "$F"
 
@@ -25,7 +27,9 @@ display_banner() {
     
     # Calculate padding for centering
     local padding=$(( (term_width - 78) / 2 ))
-    [ $padding -lt 0 ] && padding=0
+    if [ $padding -lt 0 ]; then
+        padding=0
+    fi
     
     # Create padding string
     local pad_str=""
@@ -50,7 +54,7 @@ display_banner() {
         echo -e "${pad_str}${YELLOW}╚═╝                   ╚══════╝ ╚═════╝  ╚═════╝╚═╝╚══════╝   ╚═╝      ╚═╝   ${NC}"
         echo -e "${pad_str}${ORANGE}            CCTV HACKING & JAMMING TOOLKIT v3.0           ${NC}"
     else
-        # Large terminal - full banner with your ASCII art
+        # Large terminal - full banner with ASCII art
         echo -e "${pad_str}${RED}╔══════════════════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${pad_str}${CYAN}║  ███████╗              ███████╗ ██████╗  ██████╗██╗███████╗████████╗██╗   ██╗  ║${NC}"
         echo -e "${pad_str}${GREEN}║  ██╔════╝              ██╔════╝██╔═══██╗██╔════╝██║██╔════╝╚══██╔══╝╚██╗ ██╔╝  ║${NC}"
@@ -60,7 +64,7 @@ display_banner() {
         echo -e "${pad_str}${YELLOW}║  ╚═╝                   ╚══════╝ ╚═════╝  ╚═════╝╚═╝╚══════╝   ╚═╝      ╚═╝    ║${NC}"
         echo -e "${pad_str}${MAGENTA}╠══════════════════════════════════════════════════════════════════════════╣${NC}"
         echo -e "${pad_str}${ORANGE}║  🚀 ADVANCED SECURITY PENETRATION TOOLKIT • CCTV EDITION v3.0 🚀         ║${NC}"
-        echo -e "${pad_str}${LIME}║               CREATED BY: ATHEX BL4CK H4T & MARUF ZERO TRACE                     ║${NC}"
+        echo -e "${pad_str}${LIME}║               CREATED BY: ATHEX BL4CK H4T                    ║${NC}"
         echo -e "${pad_str}${RED}╚══════════════════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         echo -e "${pad_str}${YELLOW}════════════════════════════════════════════════════════════════════════════${NC}"
@@ -78,12 +82,12 @@ check_and_run() {
     if [ ! -f "$script" ]; then
         echo -e "${RED}Error: File not found: $script${NC}"
         echo -e "${YELLOW}Please make sure the script exists in the '$F' folder${NC}"
-        read -rp "$(echo -e "${GREEN}"'Press Enter to continue...'"${NC}")"
+        read -r -p "$(echo -e "${GREEN}Press Enter to continue...${NC}")"
         return 1
     fi
     
     if [ ! -x "$script" ] && [ "$executor" = "bash" ]; then
-        chmod +x "$script" 2>/dev/null
+        chmod +x "$script" 2>/dev/null || true
     fi
     
     echo -e "${CYAN}Running $script...${NC}"
@@ -121,7 +125,7 @@ echo "This is the old version script"
 echo "Place your old CCTV hacking script here"
 echo "Current directory: $(pwd)"
 echo "Press Enter to return to main menu..."
-read
+read -r
 EOF
         chmod +x "$F/old-version.sh"
     fi
@@ -138,7 +142,7 @@ echo "This is the updated version script"
 echo "Place your updated CCTV hacking script here"
 echo "Current time: $(date)"
 echo "Press Enter to return to main menu..."
-read
+read -r
 EOF
         chmod +x "$F/updated.sh"
     fi
@@ -208,7 +212,7 @@ while true; do
     echo -e "${RED}[0]${NC} 🚪 Exit Program"
     echo
     
-    read -rp "$(echo -e "${YELLOW}"'🎯 Choice: '"${NC}")" c
+    read -r -p "$(echo -e "${YELLOW}🎯 Choice: ${NC}")" c
     
     case $c in
         1) check_and_run "$F/old-version.sh" "bash" ;;
