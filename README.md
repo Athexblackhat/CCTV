@@ -124,7 +124,7 @@ pip3 install requests urllib3 colorama bs4
 
 - RTSP stream hunting
 
-Configuration extraction
+- Configuration extraction
 
 Report generation
 
