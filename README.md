@@ -126,7 +126,7 @@ pip3 install requests urllib3 colorama bs4
 
 - Configuration extraction
 
-Report generation
+- Report generation
 
 
 
