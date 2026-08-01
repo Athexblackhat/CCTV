@@ -150,7 +150,7 @@ html
 • 192.168.1.10:80:admin:12345 (Default)
 • 192.168.1.11:80:admin:admin (Default)
 
-*Accessible Streams:
+Accessible Streams:
 • rtsp://192.168.1.10:554/stream1
 • rtsp://admin:12345@192.168.1.10:554/main
 
