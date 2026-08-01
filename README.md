@@ -122,7 +122,7 @@ pip3 install requests urllib3 colorama bs4
 
 - Credential attacks
 
-RTSP stream hunting
+- RTSP stream hunting
 
 Configuration extraction
 
