@@ -136,7 +136,7 @@ html
 📹 CCTV Penetration Test Report
 ================================
 
-*Executive Summary:*
+Executive Summary:
 - Systems Found: 12
 - Credentials: 3
 - Streams: 5
