@@ -114,7 +114,7 @@ pip3 install requests urllib3 colorama bs4
 
 ### 🛠️ Tool Components
 
-Network discovery
+- Network discovery
 
 Service fingerprinting
 
