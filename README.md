@@ -120,7 +120,7 @@ pip3 install requests urllib3 colorama bs4
 
 - Vulnerability scanning
 
-Credential attacks
+- Credential attacks
 
 RTSP stream hunting
 
