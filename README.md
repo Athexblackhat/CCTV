@@ -170,13 +170,13 @@ By using this software, you agree to:
 3. Accept full responsibility for your actions
 4. Not use for any illegal activities
 
-The author (ATHEX BL4CK H4T) assumes no liability for:
+## The author (ATHEX BL4CK H4T) assumes no liability for:
 - Misuse of this tool
 - Damage caused by unauthorized testing
 - Violation of laws or regulations
 - Any legal consequences resulting from use
 
-UNAUTHORIZED ACCESS TO COMPUTER SYSTEMS IS ILLEGAL.
+## UNAUTHORIZED ACCESS TO COMPUTER SYSTEMS IS ILLEGAL.
 This tool is designed for security professionals and researchers
 to improve the security of their own systems.
 
