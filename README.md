@@ -116,7 +116,7 @@ pip3 install requests urllib3 colorama bs4
 
 - Network discovery
 
-Service fingerprinting
+- Service fingerprinting
 
 Vulnerability scanning
 
