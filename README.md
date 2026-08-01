@@ -118,7 +118,7 @@ pip3 install requests urllib3 colorama bs4
 
 - Service fingerprinting
 
-Vulnerability scanning
+- Vulnerability scanning
 
 Credential attacks
 
