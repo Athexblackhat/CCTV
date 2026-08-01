@@ -181,13 +181,6 @@ This tool is designed for security professionals and researchers
 to improve the security of their own systems.
 
 
-## 📜 Version History
-Version		Changes
-4.0		   Ultimate Edition - Added animations, improved detection, enhanced reporting
-3.0		   Added RTSP stream capture, configuration extraction
-2.0		   Added vulnerability scanning, credential attacks
-1.0		   Initial release with basic discovery
-
 
 <div align="center">
 "Securing the Digital World, One Line at a Time"
